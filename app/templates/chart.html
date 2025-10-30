@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="text-center mb-4">📈 Interactive Finance Charts</h2>
+
+<!-- Chart Controls -->
+<div class="d-flex justify-content-center mb-3 gap-2">
+    <select id="chartType" class="form-select w-auto">
+        <option value="pie">Pie Chart</option>
+        <option value="bar">Bar Chart</option>
+        <option value="line">Line Chart</option>
+        <option value="doughnut">Doughnut Chart</option>
+    </select>
+    <button id="addChartBtn" class="btn btn-primary">➕ Add Chart</button>
+</div>
+
+<!-- Main Chart Container -->
+<div id="chartArea" class="d-flex flex-wrap justify-content-center gap-3">
+    <div class="chart-container card p-3 text-center" style="width: 350px; height: 280px;">
+        <canvas id="financeChart"></canvas>
+    </div>
+</div>
+
+<!-- Chart.js + Interact.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+
+<script>
+    // Flask data
+    const chartData = {{ chart_data | tojson }};
+    
+    // Chart creation function
+    function createChart(ctx, type = 'pie', data = chartData) {
+        return new Chart(ctx, {
+            type: type,
+            data: {
+                labels: ['Income', 'Expense'],
+                datasets: [{
+                    label: 'Finance Overview',
+                    data: [data.income, data.expense],
+                    backgroundColor: ['#28a745', '#dc3545'],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' },
+                    title: {
+                        display: true,
+                        text: `Income vs Expense (${type.toUpperCase()})`
+                    }
+                },
+                scales: type === 'bar' || type === 'line' ? {
+                    y: { beginAtZero: true }
+                } : {}
+            }
+        });
+    }
+
+    // Main chart
+    const mainCtx = document.getElementById('financeChart').getContext('2d');
+    createChart(mainCtx, 'pie');
+
+    // Draggable + resizable setup
+    function makeInteractive(selector) {
+        interact(selector)
+            .draggable({
+                inertia: true,
+                modifiers: [
+                    interact.modifiers.restrictRect({
+                        restriction: 'parent',
+                        endOnly: true
+                    })
+                ],
+                listeners: {
+                    move(event) {
+                        const target = event.target;
+                        const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+                        const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+                        target.style.transform = `translate(${x}px, ${y}px)`;
+                        target.setAttribute('data-x', x);
+                        target.setAttribute('data-y', y);
+                    }
+                }
+            })
+            .resizable({
+                edges: { left: true, right: true, bottom: true, top: true },
+                modifiers: [
+                    interact.modifiers.restrictSize({
+                        min: { width: 250, height: 200 },
+                        max: { width: 500, height: 400 }
+                    })
+                ],
+                listeners: {
+                    move(event) {
+                        let { x, y } = event.target.dataset;
+                        Object.assign(event.target.style, {
+                            width: `${event.rect.width}px`,
+                            height: `${event.rect.height}px`
+                        });
+                        x = (parseFloat(x) || 0) + event.deltaRect.left;
+                        y = (parseFloat(y) || 0) + event.deltaRect.top;
+                        Object.assign(event.target.style, {
+                            transform: `translate(${x}px, ${y}px)`
+                        });
+                        event.target.dataset.x = x;
+                        event.target.dataset.y = y;
+                    }
+                }
+            });
+    }
+
+    // Make initial chart interactive
+    makeInteractive('.chart-container');
+
+    // Add new chart dynamically
+    document.getElementById('addChartBtn').addEventListener('click', () => {
+        const selectedType = document.getElementById('chartType').value;
+
+        const chartDiv = document.createElement('div');
+        chartDiv.classList.add('chart-container', 'card', 'p-3', 'text-center');
+        chartDiv.style.width = '350px';
+        chartDiv.style.height = '280px';
+        chartDiv.innerHTML = `<canvas></canvas>`;
+        document.getElementById('chartArea').appendChild(chartDiv);
+
+        const newCtx = chartDiv.querySelector('canvas').getContext('2d');
+        createChart(newCtx, selectedType);
+        makeInteractive(chartDiv);
+    });
+</script>
+{% endblock %}
